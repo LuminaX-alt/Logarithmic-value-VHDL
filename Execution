@@ -1,0 +1,68 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity tb_log2_calculator is
+end tb_log2_calculator;
+
+architecture test of tb_log2_calculator is
+
+    signal clk     : std_logic := '0';
+    signal reset   : std_logic := '1';
+    signal start   : std_logic := '0';
+    signal a       : std_logic_vector(30 downto 0) := (others => '0');
+    signal done    : std_logic;
+    signal result  : std_logic_vector(30 downto 0);
+
+    constant clk_period : time := 10 ns;
+
+    component log2_calculator
+        Port (
+            clk     : in  std_logic;
+            reset   : in  std_logic;
+            start   : in  std_logic;
+            a       : in  std_logic_vector(30 downto 0);
+            done    : out std_logic;
+            result  : out std_logic_vector(30 downto 0)
+        );
+    end component;
+
+begin
+
+    uut: log2_calculator
+        Port map (
+            clk => clk,
+            reset => reset,
+            start => start,
+            a => a,
+            done => done,
+            result => result
+        );
+
+    clk_process : process
+    begin
+        clk <= not clk;
+        wait for clk_period / 2;
+    end process;
+
+    stim_proc: process
+    begin
+        -- Initialize
+        wait for 20 ns;
+        reset <= '0';
+
+        -- Test value: log2(4.0) = 2.0 --> input = 4.0 in 8.23 fixed = 4 * 2^23 = 33554432
+        wait for 10 ns;
+        a <= std_logic_vector(to_signed(33554432, 31));
+        start <= '1';
+        wait for clk_period;
+        start <= '0';
+
+        wait until done = '1';
+
+        -- Add more test values if needed here
+
+        wait;
+    end process;
+
+end test;
