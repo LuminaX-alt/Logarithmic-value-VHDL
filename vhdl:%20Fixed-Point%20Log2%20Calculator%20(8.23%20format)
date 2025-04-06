@@ -1,0 +1,91 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity log2_calculator is
+    Port (
+        clk     : in  std_logic;
+        reset   : in  std_logic;
+        start   : in  std_logic;
+        a       : in  std_logic_vector(30 downto 0); -- 8.23 fixed point input
+        done    : out std_logic;
+        result  : out std_logic_vector(30 downto 0)  -- Log2 result (signed 8.23)
+    );
+end log2_calculator;
+
+architecture Behavioral of log2_calculator is
+
+    type state_type is (IDLE, NORMALIZE, CALC_MANTISSA, DONE);
+    signal state        : state_type := IDLE;
+
+    signal atemp        : signed(30 downto 0);
+    signal mant_temp    : signed(61 downto 0); -- to hold square of 31-bit number
+    signal ch           : integer range -128 to 127 := 0; -- characteristic
+    signal cnt          : integer range 0 to 23 := 23;
+    signal mantissa     : std_logic_vector(22 downto 0) := (others => '0');
+    signal done_reg     : std_logic := '0';
+
+begin
+
+    process(clk, reset)
+    begin
+        if reset = '1' then
+            state <= IDLE;
+            atemp <= (others => '0');
+            mant_temp <= (others => '0');
+            cnt <= 23;
+            ch <= 0;
+            mantissa <= (others => '0');
+            done_reg <= '0';
+        elsif rising_edge(clk) then
+            case state is
+
+                when IDLE =>
+                    done_reg <= '0';
+                    if start = '1' then
+                        atemp <= signed(a);
+                        ch <= 0;
+                        cnt <= 23;
+                        state <= NORMALIZE;
+                    end if;
+
+                when NORMALIZE =>
+                    if atemp < to_signed(2**23, 31) then -- < 1.0
+                        atemp <= atemp sll 1;
+                        ch <= ch - 1;
+                    elsif atemp > to_signed(2*2**23, 31) then -- > 2.0
+                        atemp <= atemp srl 1;
+                        ch <= ch + 1;
+                    else
+                        state <= CALC_MANTISSA;
+                    end if;
+
+                when CALC_MANTISSA =>
+                    if cnt = 0 then
+                        state <= DONE;
+                    else
+                        mant_temp <= resize(atemp, 62) * resize(atemp, 62);
+                        if mant_temp > to_signed(2*2**46, 62) then
+                            mantissa(cnt-1) <= '1';
+                            atemp <= signed(mant_temp(61 downto 31)) / 2;
+                        else
+                            mantissa(cnt-1) <= '0';
+                            atemp <= signed(mant_temp(61 downto 31));
+                        end if;
+                        cnt <= cnt - 1;
+                    end if;
+
+                when DONE =>
+                    done_reg <= '1';
+                    state <= IDLE;
+            end case;
+        end if;
+    end process;
+
+    done <= done_reg;
+
+    result <= std_logic_vector(
+        signed(to_signed(ch, 8) & mantissa)  -- combining characteristic and mantissa
+    );
+
+end Behavioral;
